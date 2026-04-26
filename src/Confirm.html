@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: Arial, sans-serif; background: #f5f5f5; color: #333; }
+    .container { max-width: 600px; margin: 20px auto; background: #fff; border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden; }
+    .header { background: #27ae60; color: #fff; padding: 24px; text-align: center; }
+    .content { padding: 24px; text-align: center; }
+    .btn { display: inline-block; background: #1a5490; color: #fff; padding: 12px 30px;
+      text-decoration: none; border-radius: 5px; font-weight: bold; margin: 8px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Registration Confirmed!</h1>
+    </div>
+    <div class="content">
+      <p>Your registration has been submitted. A confirmation email with payment instructions
+        has been sent to your email address.</p>
+      <p style="margin-top:20px">
+        <a href="#" class="btn" style="color:#fff" onclick="goToStatus()">Check Registration Status</a>
+      </p>
+    </div>
+  </div>
+<script>
+  function goToStatus() {
+    google.script.run
+      .withSuccessHandler(function(url) { window.open(url + '?page=status', '_top'); })
+      .getScriptUrl();
+  }
+</script>
+</body>
+</html>

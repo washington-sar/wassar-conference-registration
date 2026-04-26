@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #f5f5f5; color: #333; }
+    .container { max-width: 700px; margin: 20px auto; background: #fff; border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1); overflow: hidden; }
+    .header { background: #1a5490; color: #fff; padding: 24px; text-align: center; }
+    .header h1 { font-size: 22px; }
+    .header p { font-size: 14px; opacity: 0.9; margin-top: 4px; }
+    .closed { padding: 40px; text-align: center; }
+    .closed h2 { color: #c0392b; }
+
+    /* Progress bar */
+    .progress { display: flex; padding: 16px 24px; background: #f0f8ff; border-bottom: 1px solid #ddd; }
+    .progress .step { flex: 1; text-align: center; font-size: 12px; color: #999; position: relative; }
+    .progress .step.active { color: #1a5490; font-weight: bold; }
+    .progress .step.done { color: #27ae60; }
+    .progress .step::after { content: ''; position: absolute; top: -8px; left: 50%;
+      transform: translateX(-50%); width: 10px; height: 10px; border-radius: 50%;
+      background: #ddd; }
+    .progress .step.active::after { background: #1a5490; }
+    .progress .step.done::after { background: #27ae60; }
+
+    /* Form sections */
+    .form-section { display: none; padding: 24px; }
+    .form-section.active { display: block; }
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-weight: bold; margin-bottom: 4px; font-size: 14px; }
+    .form-group .hint { font-size: 12px; color: #666; margin-bottom: 4px; }
+    input[type="text"], input[type="email"], input[type="tel"], input[type="number"],
+    select, textarea {
+      width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
+    textarea { resize: vertical; min-height: 60px; }
+    .required::after { content: ' *'; color: #c0392b; }
+
+    /* Meal grid */
+    .meal-event { background: #f9f9f9; padding: 12px; border-radius: 4px; margin-bottom: 12px; }
+    .meal-event h4 { margin-bottom: 8px; color: #1a5490; }
+    .meal-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .meal-row label { flex: 0 0 100px; font-weight: normal; font-size: 13px; }
+    .meal-row select { flex: 1; }
+
+    /* Guest section */
+    .guest-block { border: 1px solid #ddd; border-radius: 4px; padding: 16px; margin-bottom: 12px;
+      position: relative; }
+    .guest-block h4 { color: #1a5490; margin-bottom: 12px; }
+    .remove-guest { position: absolute; top: 12px; right: 12px; background: #e74c3c; color: #fff;
+      border: none; border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 12px; }
+    .add-guest-btn { background: #27ae60; color: #fff; border: none; border-radius: 4px;
+      padding: 10px 20px; cursor: pointer; font-size: 14px; }
+
+    /* Running total */
+    .running-total { background: #f0f8ff; border: 2px solid #1a5490; border-radius: 4px;
+      padding: 16px; margin: 16px 0; text-align: center; }
+    .running-total .amount { font-size: 28px; font-weight: bold; color: #1a5490; }
+
+    /* Buttons */
+    .btn-row { display: flex; justify-content: space-between; padding: 16px 24px;
+      border-top: 1px solid #eee; }
+    .btn { padding: 12px 28px; border: none; border-radius: 4px; font-size: 15px;
+      cursor: pointer; font-weight: bold; }
+    .btn-next { background: #1a5490; color: #fff; }
+    .btn-back { background: #ddd; color: #333; }
+    .btn-submit { background: #27ae60; color: #fff; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Review */
+    .review-section { background: #f9f9f9; padding: 16px; border-radius: 4px; margin-bottom: 12px; }
+    .review-section h4 { color: #1a5490; margin-bottom: 8px; }
+    .review-row { display: flex; padding: 4px 0; font-size: 14px; }
+    .review-label { flex: 0 0 180px; font-weight: bold; }
+
+    /* Status link */
+    .status-link { text-align: center; padding: 12px; font-size: 13px; }
+    .status-link a { color: #1a5490; }
+
+    .spinner { display: none; text-align: center; padding: 40px; }
+    .spinner.active { display: block; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 id="eventName">Conference Registration</h1>
+      <p id="eventDates"></p>
+    </div>
+
+    <div id="closedMessage" class="closed" style="display:none">
+      <h2>Registration is Closed</h2>
+      <p>The registration deadline has passed. Please contact the conference organizer.</p>
+    </div>
+
+    <div id="loadingSpinner" class="spinner active">Loading registration form...</div>
+
+    <div id="formContent" style="display:none">
+      <div class="progress" id="progressBar"></div>
+
+      <!-- Step 1: Contact Info -->
+      <div class="form-section active" data-step="0">
+        <h3>Contact Information</h3>
+        <div class="form-group">
+          <label class="required">Email Address</label>
+          <input type="email" id="email" required>
+          <div class="hint">Your confirmation and payment link will be sent here</div>
+        </div>
+        <div class="form-group">
+          <label>Phone Number</label>
+          <input type="tel" id="phone">
+        </div>
+        <div class="form-group">
+          <label class="required">Compatriot Name</label>
+          <input type="text" id="name" required>
+        </div>
+        <div class="form-group">
+          <label>Chapter</label>
+          <input type="text" id="chapter">
+        </div>
+        <div class="form-group">
+          <label>Office/Title</label>
+          <input type="text" id="officeTitle">
+        </div>
+        <div class="form-group">
+          <label>Compatriot Affiliations</label>
+          <input type="text" id="affiliations">
+        </div>
+        <div class="form-group">
+          <label>Additional Details</label>
+          <textarea id="additionalDetails"></textarea>
+        </div>
+        <div class="form-group">
+          <label>Where are you staying?</label>
+          <input type="text" id="lodging">
+        </div>
+      </div>
+
+      <!-- Step 2: Guests -->
+      <div class="form-section" data-step="1">
+        <h3>Guest Information</h3>
+        <p style="margin-bottom:16px;font-size:14px;color:#666">
+          Add any guests attending with you. Each guest can select their own meals.
+        </p>
+        <div id="guestList"></div>
+        <button type="button" class="add-guest-btn" onclick="addGuest()">+ Add Guest</button>
+      </div>
+
+      <!-- Step 3: Meals -->
+      <div class="form-section" data-step="2">
+        <h3>Meal Selections</h3>
+        <div id="mealSelections"></div>
+      </div>
+
+      <!-- Step 4: Extras -->
+      <div class="form-section" data-step="3">
+        <h3>Registration &amp; Extras</h3>
+        <div class="form-group">
+          <label>How many are registering?</label>
+          <div class="hint" id="regPriceHint"></div>
+          <input type="number" id="registrationCount" min="1" value="1" onchange="updateTotal()">
+        </div>
+        <div class="form-group">
+          <label>Raffle Tickets</label>
+          <div class="hint" id="rafflePriceHint"></div>
+          <input type="number" id="raffleTickets" min="0" value="0" onchange="updateTotal()">
+        </div>
+        <div class="form-group">
+          <label>Donation</label>
+          <div id="donationOptions"></div>
+        </div>
+        <div class="form-group">
+          <label>Special Meal Requests</label>
+          <div class="hint">Gluten-free, allergies, dietary restrictions, etc.</div>
+          <textarea id="specialMealRequests"></textarea>
+        </div>
+        <div class="running-total">
+          <div>Estimated Total</div>
+          <div class="amount" id="runningTotal">$0.00</div>
+        </div>
+      </div>
+
+      <!-- Step 5: Review -->
+      <div class="form-section" data-step="4">
+        <h3>Review Your Registration</h3>
+        <div id="reviewContent"></div>
+        <div class="running-total">
+          <div>Total Due</div>
+          <div class="amount" id="finalTotal">$0.00</div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-back" id="btnBack" onclick="prevStep()" style="visibility:hidden">Back</button>
+        <button class="btn btn-next" id="btnNext" onclick="nextStep()">Next</button>
+      </div>
+
+      <div class="status-link">
+        Already registered? <a href="#" onclick="goToStatus()">Check your status</a>
+      </div>
+    </div>
+
+    <!-- Submission spinner -->
+    <div id="submitSpinner" class="spinner">Submitting your registration...</div>
+  </div>
+
+<script>
+  var formData = null;
+  var currentStep = 0;
+  var totalSteps = 5;
+  var stepNames = ['Contact', 'Guests', 'Meals', 'Extras', 'Review'];
+  var guests = [];
+
+  // ── Init ──
+
+  google.script.run
+    .withSuccessHandler(initForm)
+    .withFailureHandler(function(e) {
+      document.getElementById('loadingSpinner').innerHTML = 'Error loading form: ' + e.message;
+    })
+    .getFormData();
+
+  function initForm(data) {
+    formData = data;
+    document.getElementById('loadingSpinner').style.display = 'none';
+
+    if (!data.isOpen) {
+      document.getElementById('closedMessage').style.display = 'block';
+      return;
+    }
+
+    document.getElementById('formContent').style.display = 'block';
+    if (data.config.EventName) document.getElementById('eventName').textContent = data.config.EventName;
+    if (data.config.EventDates) document.getElementById('eventDates').textContent = data.config.EventDates;
+
+    // Registration price hint
+    var regPricing = data.pricing['Registration'];
+    if (regPricing) {
+      document.getElementById('regPriceHint').textContent = '$' + regPricing.price + ' each';
+    }
+
+    // Raffle price hint
+    var rafflePricing = data.pricing['Raffle Tickets'];
+    if (rafflePricing) {
+      document.getElementById('rafflePriceHint').textContent = '$' + rafflePricing.price + ' each';
+    }
+
+    // Donation options
+    buildDonationOptions(data.pricing);
+
+    buildProgressBar();
+    updateTotal();
+  }
+
+  // ── Progress Bar ──
+
+  function buildProgressBar() {
+    var bar = document.getElementById('progressBar');
+    bar.innerHTML = '';
+    for (var i = 0; i < totalSteps; i++) {
+      var cls = i === currentStep ? 'active' : (i < currentStep ? 'done' : '');
+      bar.innerHTML += '<div class="step ' + cls + '">' + stepNames[i] + '</div>';
+    }
+  }
+
+  // ── Navigation ──
+
+  function showStep(step) {
+    var sections = document.querySelectorAll('.form-section');
+    for (var i = 0; i < sections.length; i++) {
+      sections[i].classList.toggle('active', i === step);
+    }
+    currentStep = step;
+    buildProgressBar();
+
+    document.getElementById('btnBack').style.visibility = step === 0 ? 'hidden' : 'visible';
+    var btnNext = document.getElementById('btnNext');
+    if (step === totalSteps - 1) {
+      btnNext.textContent = 'Submit Registration';
+      btnNext.className = 'btn btn-submit';
+    } else {
+      btnNext.textContent = 'Next';
+      btnNext.className = 'btn btn-next';
+    }
+  }
+
+  function nextStep() {
+    if (currentStep === 0 && !validateContact()) return;
+    if (currentStep === totalSteps - 1) {
+      submitForm();
+      return;
+    }
+    if (currentStep === 1) buildMealSelections();
+    if (currentStep === 3) buildReview();
+    showStep(currentStep + 1);
+    window.scrollTo(0, 0);
+  }
+
+  function prevStep() {
+    if (currentStep > 0) showStep(currentStep - 1);
+    window.scrollTo(0, 0);
+  }
+
+  function validateContact() {
+    var email = document.getElementById('email').value.trim();
+    var name = document.getElementById('name').value.trim();
+    if (!email || !name) {
+      alert('Please fill in your email and name.');
+      return false;
+    }
+    return true;
+  }
+
+  // ── Guests ──
+
+  function addGuest() {
+    var idx = guests.length;
+    guests.push({ name: '', email: '', affiliations: '', specialMealRequests: '', meals: {} });
+    renderGuests();
+  }
+
+  function removeGuest(idx) {
+    guests.splice(idx, 1);
+    renderGuests();
+    updateTotal();
+  }
+
+  function renderGuests() {
+    var container = document.getElementById('guestList');
+    container.innerHTML = '';
+    for (var i = 0; i < guests.length; i++) {
+      var g = guests[i];
+      var html = '<div class="guest-block">' +
+        '<h4>Guest ' + (i + 1) + '</h4>' +
+        '<button type="button" class="remove-guest" onclick="removeGuest(' + i + ')">Remove</button>' +
+        '<div class="form-group"><label>Guest Name</label>' +
+        '<input type="text" value="' + esc(g.name) + '" onchange="guests[' + i + '].name=this.value"></div>' +
+        '<div class="form-group"><label>Guest Email</label>' +
+        '<input type="email" value="' + esc(g.email) + '" onchange="guests[' + i + '].email=this.value"></div>' +
+        '<div class="form-group"><label>Guest Affiliations</label>' +
+        '<input type="text" value="' + esc(g.affiliations) + '" onchange="guests[' + i + '].affiliations=this.value"></div>' +
+        '<div class="form-group"><label>Dietary Needs / Special Requests</label>' +
+        '<input type="text" value="' + esc(g.specialMealRequests) + '" onchange="guests[' + i + '].specialMealRequests=this.value"></div>' +
+        '</div>';
+      container.innerHTML += html;
+    }
+  }
+
+  // ── Meals ──
+
+  function buildMealSelections() {
+    var container = document.getElementById('mealSelections');
+    container.innerHTML = '';
+    var meals = formData.meals;
+
+    for (var event in meals) {
+      var options = meals[event];
+      var html = '<div class="meal-event"><h4>' + esc(event) + '</h4>';
+
+      // Compatriot row
+      html += '<div class="meal-row"><label>Compatriot:</label>' +
+        buildMealSelect('compatriot', event, options) + '</div>';
+
+      // Guest rows
+      for (var i = 0; i < guests.length; i++) {
+        html += '<div class="meal-row"><label>' + esc(guests[i].name || 'Guest ' + (i + 1)) + ':</label>' +
+          buildMealSelect('guest-' + i, event, options) + '</div>';
+      }
+
+      html += '</div>';
+      container.innerHTML += html;
+    }
+  }
+
+  function buildMealSelect(person, event, options) {
+    var id = 'meal-' + person + '-' + event.replace(/[^a-zA-Z0-9]/g, '_');
+    var html = '<select id="' + id + '" onchange="onMealChange(\'' + person + '\',\'' +
+      esc(event) + '\',this);updateTotal()">';
+    html += '<option value="">No Meal ($0)</option>';
+    for (var i = 0; i < options.length; i++) {
+      html += '<option value="' + options[i].price + '" data-option="' + esc(options[i].option) + '">' +
+        esc(options[i].option) + ' ($' + options[i].price + ')</option>';
+    }
+    html += '</select>';
+    return html;
+  }
+
+  function onMealChange(person, event, select) {
+    var price = Number(select.value) || 0;
+    var option = select.options[select.selectedIndex].getAttribute('data-option') || 'No Meal';
+
+    if (person === 'compatriot') {
+      if (!window._compatriotMeals) window._compatriotMeals = {};
+      window._compatriotMeals[event] = { option: option, price: price };
+    } else {
+      var idx = parseInt(person.split('-')[1]);
+      if (!guests[idx].meals) guests[idx].meals = {};
+      guests[idx].meals[event] = { option: option, price: price };
+    }
+  }
+
+  // ── Donations ──
+
+  function buildDonationOptions(pricing) {
+    var container = document.getElementById('donationOptions');
+    var html = '<select id="donation" onchange="updateTotal()">';
+    html += '<option value="">No Donation</option>';
+    for (var key in pricing) {
+      if (key.startsWith('Donation')) {
+        html += '<option value="' + key + '" data-price="' + pricing[key].price + '">' +
+          pricing[key].description + ' ($' + pricing[key].price + ')</option>';
+      }
+    }
+    html += '<option value="custom">Custom Amount...</option>';
+    html += '</select>';
+    html += '<input type="number" id="customDonation" min="0" placeholder="Enter amount"' +
+      ' style="display:none;margin-top:8px" onchange="updateTotal()">';
+    container.innerHTML = html;
+
+    document.getElementById('donation').addEventListener('change', function() {
+      document.getElementById('customDonation').style.display =
+        this.value === 'custom' ? 'block' : 'none';
+    });
+  }
+
+  // ── Running Total ──
+
+  function updateTotal() {
+    if (!formData) return;
+    var total = 0;
+    var pricing = formData.pricing;
+
+    // Registration
+    var regCount = Number(document.getElementById('registrationCount').value) || 1;
+    var regPrice = pricing['Registration'] ? pricing['Registration'].price : 15;
+    total += regCount * regPrice;
+
+    // Compatriot meals
+    var cMeals = window._compatriotMeals || {};
+    for (var e in cMeals) total += cMeals[e].price || 0;
+
+    // Guest meals
+    for (var i = 0; i < guests.length; i++) {
+      if (guests[i].meals) {
+        for (var ge in guests[i].meals) total += guests[i].meals[ge].price || 0;
+      }
+    }
+
+    // Raffle
+    var raffleCount = Number(document.getElementById('raffleTickets').value) || 0;
+    var rafflePrice = pricing['Raffle Tickets'] ? pricing['Raffle Tickets'].price : 25;
+    total += raffleCount * rafflePrice;
+
+    // Donation
+    var donationSel = document.getElementById('donation');
+    if (donationSel) {
+      if (donationSel.value === 'custom') {
+        total += Number(document.getElementById('customDonation').value) || 0;
+      } else if (donationSel.value && pricing[donationSel.value]) {
+        total += pricing[donationSel.value].price;
+      }
+    }
+
+    document.getElementById('runningTotal').textContent = '$' + total.toFixed(2);
+    document.getElementById('finalTotal').textContent = '$' + total.toFixed(2);
+  }
+
+  // ── Review ──
+
+  function buildReview() {
+    updateTotal();
+    var html = '<div class="review-section"><h4>Contact Information</h4>';
+    html += reviewRow('Email', val('email'));
+    html += reviewRow('Name', val('name'));
+    if (val('phone')) html += reviewRow('Phone', val('phone'));
+    if (val('chapter')) html += reviewRow('Chapter', val('chapter'));
+    if (val('officeTitle')) html += reviewRow('Office/Title', val('officeTitle'));
+    if (val('affiliations')) html += reviewRow('Affiliations', val('affiliations'));
+    if (val('lodging')) html += reviewRow('Lodging', val('lodging'));
+    html += '</div>';
+
+    if (guests.length > 0) {
+      html += '<div class="review-section"><h4>Guests</h4>';
+      for (var i = 0; i < guests.length; i++) {
+        html += reviewRow('Guest ' + (i + 1), guests[i].name +
+          (guests[i].email ? ' (' + guests[i].email + ')' : ''));
+      }
+      html += '</div>';
+    }
+
+    html += '<div class="review-section"><h4>Meals</h4>';
+    var cMeals = window._compatriotMeals || {};
+    for (var e in cMeals) {
+      html += reviewRow(e + ' (Compatriot)', cMeals[e].option + ' ($' + cMeals[e].price + ')');
+    }
+    for (var j = 0; j < guests.length; j++) {
+      if (guests[j].meals) {
+        for (var ge in guests[j].meals) {
+          html += reviewRow(ge + ' (' + (guests[j].name || 'Guest ' + (j+1)) + ')',
+            guests[j].meals[ge].option + ' ($' + guests[j].meals[ge].price + ')');
+        }
+      }
+    }
+    html += '</div>';
+
+    html += '<div class="review-section"><h4>Extras</h4>';
+    html += reviewRow('Registrants', val('registrationCount'));
+    if (Number(val('raffleTickets')) > 0) html += reviewRow('Raffle Tickets', val('raffleTickets'));
+    var donSel = document.getElementById('donation');
+    if (donSel && donSel.value) {
+      var donText = donSel.value === 'custom' ? '$' + val('customDonation') :
+        donSel.options[donSel.selectedIndex].textContent;
+      html += reviewRow('Donation', donText);
+    }
+    if (val('specialMealRequests')) html += reviewRow('Special Requests', val('specialMealRequests'));
+    html += '</div>';
+
+    document.getElementById('reviewContent').innerHTML = html;
+  }
+
+  function reviewRow(label, value) {
+    return '<div class="review-row"><span class="review-label">' + esc(label) +
+      ':</span><span>' + esc(value) + '</span></div>';
+  }
+
+  // ── Submit ──
+
+  function submitForm() {
+    var btnNext = document.getElementById('btnNext');
+    btnNext.disabled = true;
+    document.getElementById('formContent').style.display = 'none';
+    document.getElementById('submitSpinner').className = 'spinner active';
+
+    var donationSel = document.getElementById('donation');
+    var donationValue = '';
+    if (donationSel.value === 'custom') {
+      donationValue = val('customDonation');
+    } else {
+      donationValue = donationSel.value;
+    }
+
+    var data = {
+      email: val('email'),
+      phone: val('phone').replace(/\D/g, ''),
+      name: val('name'),
+      chapter: val('chapter'),
+      officeTitle: val('officeTitle'),
+      affiliations: val('affiliations'),
+      additionalDetails: val('additionalDetails'),
+      lodging: val('lodging'),
+      registrationCount: Number(val('registrationCount')) || 1,
+      specialMealRequests: val('specialMealRequests'),
+      raffleTickets: Number(val('raffleTickets')) || 0,
+      donation: donationValue,
+      meals: window._compatriotMeals || {},
+      guests: guests
+    };
+
+    google.script.run
+      .withSuccessHandler(onSubmitSuccess)
+      .withFailureHandler(function(e) {
+        alert('Error: ' + e.message);
+        document.getElementById('formContent').style.display = 'block';
+        document.getElementById('submitSpinner').className = 'spinner';
+        btnNext.disabled = false;
+      })
+      .submitRegistration(data);
+  }
+
+  function onSubmitSuccess(result) {
+    if (result.status === 'error') {
+      alert(result.message);
+      document.getElementById('formContent').style.display = 'block';
+      document.getElementById('submitSpinner').className = 'spinner';
+      return;
+    }
+    // Redirect to confirmation page
+    var url = ScriptApp.getService().getUrl ?
+      ScriptApp.getService().getUrl() : '';
+    google.script.run
+      .withSuccessHandler(function(url) {
+        // Show inline confirmation since we can't easily redirect in Apps Script
+        showConfirmation(result);
+      })
+      .withFailureHandler(function() {
+        showConfirmation(result);
+      })
+      .getScriptUrl();
+  }
+
+  function showConfirmation(result) {
+    document.getElementById('submitSpinner').className = 'spinner';
+    var container = document.querySelector('.container');
+    container.innerHTML =
+      '<div class="header"><h1>Registration Confirmed!</h1></div>' +
+      '<div style="padding:24px">' +
+      '<div style="background:#f0f8ff;padding:15px;border-left:4px solid #1a5490;margin:20px 0">' +
+      '<strong>Registration ID:</strong> ' + esc(result.registrationId) + '</div>' +
+      '<table style="border-collapse:collapse;margin:20px 0;width:100%;max-width:400px">' +
+      '<tr><td style="padding:10px 20px;background:#b1bde3;border:1px solid #0b2c82">' +
+      '<strong>Check/Zelle Total:</strong></td>' +
+      '<td style="padding:10px 20px;background:#b1bde3;border:1px solid #0b2c82;font-size:18px">' +
+      '<strong>$' + result.total.toFixed(2) + '</strong></td></tr>' +
+      '<tr><td style="padding:10px 20px;background:#f0abbc;border:1px solid #9d1736">' +
+      '<strong>Credit Card Total:</strong></td>' +
+      '<td style="padding:10px 20px;background:#f0abbc;border:1px solid #9d1736;font-size:18px">' +
+      '<strong>$' + result.totalWithFees.toFixed(2) + '</strong><br>' +
+      '<span style="font-size:12px;color:#666">includes $' + result.fees.toFixed(2) + ' fee</span>' +
+      '</td></tr></table>' +
+      '<p>A confirmation email with payment instructions has been sent to your email address.</p>' +
+      (result.stripeUrl ? '<p style="margin-top:16px"><a href="' + result.stripeUrl +
+        '" target="_blank" style="display:inline-block;background:#1a5490;color:#fff;' +
+        'padding:12px 30px;text-decoration:none;border-radius:5px;font-weight:bold">' +
+        'Pay with Credit Card</a></p>' : '') +
+      '</div>';
+  }
+
+  // ── Helpers ──
+
+  function val(id) {
+    var el = document.getElementById(id);
+    return el ? el.value.trim() : '';
+  }
+
+  function esc(s) {
+    if (!s) return '';
+    var div = document.createElement('div');
+    div.textContent = String(s);
+    return div.innerHTML;
+  }
+
+  function goToStatus() {
+    google.script.run
+      .withSuccessHandler(function(url) {
+        window.open(url + '?page=status', '_blank');
+      })
+      .withFailureHandler(function() {
+        // Fallback: just change the page parameter
+        window.open(window.location.href.replace(/page=[^&]*/, 'page=status'), '_blank');
+      })
+      .getScriptUrl();
+  }
+</script>
+</body>
+</html>
