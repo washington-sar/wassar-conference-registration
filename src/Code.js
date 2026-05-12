@@ -85,12 +85,22 @@ function submitRegistration(formData) {
     // Save guests
     saveGuests(registrationId, formData.guests || []);
 
-    // Calculate totals and send email
+    // Calculate totals
     var total = calculateTotal(formData);
     var stripe = calculateStripeFees(total);
-    var stripeUrl = createStripeUrl(stripe.stripeAmount, registrationId, formData.email);
+    var stripeUrl = '';
 
-    sendConfirmationEmail(formData, registrationId, total, stripe, stripeUrl);
+    // Stripe + email are non-critical — don't block registration
+    try {
+      stripeUrl = createStripeUrl(stripe.stripeAmount, registrationId, formData.email, formData);
+    } catch (stripeErr) {
+      Logger.log('Stripe URL error: ' + stripeErr.message);
+    }
+    try {
+      sendConfirmationEmail(formData, registrationId, total, stripe, stripeUrl);
+    } catch (emailErr) {
+      Logger.log('Email error: ' + emailErr.message);
+    }
 
     return JSON.stringify({
       status: 'ok',
@@ -258,11 +268,37 @@ function lookupRegistration(email) {
       // Recalculate payment info
       var total = data[i][headers.indexOf('TotalDue')];
       var stripe = calculateStripeFees(total);
-      reg.stripeUrl = createStripeUrl(stripe.stripeAmount, reg.RegistrationID, email);
+      // Build minimal formData for Stripe line items
+      var lookupFormData = {
+        registrationCount: reg.RegistrationCount || 1,
+        raffleTickets: reg.RaffleTickets || 0,
+        donation: reg.Donation || ''
+      };
+      // Calculate meal total as remainder
+      var pricing = getPricing();
+      var regPrice = pricing['Registration'] ? pricing['Registration'].price : 15;
+      var regTotal = (Number(lookupFormData.registrationCount) || 1) * regPrice;
+      var rafflePrice = pricing['Raffle Tickets'] ? pricing['Raffle Tickets'].price : 25;
+      var raffleTotal = (Number(lookupFormData.raffleTickets) || 0) * rafflePrice;
+      var donationTotal = 0;
+      if (lookupFormData.donation) {
+        var dp = pricing[lookupFormData.donation];
+        donationTotal = dp ? dp.price : (Number(lookupFormData.donation) || 0);
+      }
+      var mealTotal = total - regTotal - raffleTotal - donationTotal;
+      if (mealTotal > 0) {
+        lookupFormData.meals = { 'Meals': { option: '', price: mealTotal } };
+      }
+      reg.stripeUrl = '';
+      try {
+        reg.stripeUrl = createStripeUrl(stripe.stripeAmount, reg.RegistrationID, email, lookupFormData);
+      } catch (e) {
+        Logger.log('Stripe URL error in lookup: ' + e.message);
+      }
       reg.totalWithFees = stripe.totalWithFees;
       reg.fees = stripe.fees;
       reg.isOpen = isRegistrationOpen();
-      return reg;
+      return JSON.stringify(reg);
     }
   }
   return null;

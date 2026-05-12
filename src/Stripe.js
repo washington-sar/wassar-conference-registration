@@ -13,12 +13,122 @@ function calculateStripeFees(total) {
   };
 }
 
-function createStripeUrl(stripeAmount, registrationId, email) {
-  var baseUrl = getConfigValue('StripePaymentLink');
-  if (!baseUrl) return '';
-  return baseUrl +
-    '?client_reference_id=' + registrationId +
-    '&prefilled_email=' + encodeURIComponent(email);
+function createStripeUrl(stripeAmount, registrationId, email, formData) {
+  try {
+    var testMode = String(getConfigValue('StripeTestMode')).trim().toUpperCase();
+    var propKey = (testMode === 'TRUE') ? 'STRIPE_TEST_KEY' : 'STRIPE_SECRET_KEY';
+    var secretKey = PropertiesService.getScriptProperties().getProperty(propKey);
+    if (!secretKey) return '';
+
+  var config = getAllConfig();
+  var successUrl = getScriptUrl() + '?page=confirm&reg_id=' + registrationId;
+  var cancelUrl = getScriptUrl() + '?page=status';
+
+  var payload = {
+    'payment_method_types[]': 'card',
+    'mode': 'payment',
+    'client_reference_id': registrationId,
+    'customer_email': email,
+    'success_url': successUrl,
+    'cancel_url': cancelUrl
+  };
+
+  // Build itemized line items
+  var items = buildLineItems(formData);
+  // Add CC fee as final line item
+  var subtotal = 0;
+  for (var i = 0; i < items.length; i++) subtotal += items[i].amount;
+  var feeAmount = stripeAmount - subtotal;
+  if (feeAmount > 0) {
+    items.push({ name: 'Credit Card Processing Fee', amount: feeAmount });
+  }
+
+  for (var idx = 0; idx < items.length; idx++) {
+    var prefix = 'line_items[' + idx + ']';
+    payload[prefix + '[price_data][currency]'] = 'usd';
+    payload[prefix + '[price_data][unit_amount]'] = items[idx].amount.toString();
+    payload[prefix + '[price_data][product_data][name]'] = items[idx].name;
+    if (items[idx].description) {
+      payload[prefix + '[price_data][product_data][description]'] = items[idx].description;
+    }
+    payload[prefix + '[quantity]'] = '1';
+  }
+
+  var response = UrlFetchApp.fetch('https://api.stripe.com/v1/checkout/sessions', {
+    method: 'post',
+    headers: { 'Authorization': 'Basic ' + Utilities.base64Encode(secretKey + ':') },
+    payload: payload,
+    muteHttpExceptions: true
+  });
+
+  var session = JSON.parse(response.getContentText());
+  return session.url || '';
+  } catch (e) {
+    Logger.log('Stripe error: ' + e.message);
+    return '';
+  }
+}
+
+function buildLineItems(formData) {
+  var pricing = getPricing();
+  var items = [];
+
+  // Registration
+  var regCount = Number(formData.registrationCount) || 1;
+  var regPrice = pricing['Registration'] ? pricing['Registration'].price : 15;
+  var regTotal = regCount * regPrice;
+  if (regTotal > 0) {
+    items.push({ name: 'Registration (' + regCount + ')', amount: regTotal * 100 });
+  }
+
+  // Meals (compatriot + guests combined)
+  var mealTotal = 0;
+  if (formData.meals) {
+    for (var event in formData.meals) {
+      mealTotal += Number(formData.meals[event].price) || 0;
+    }
+  }
+  var guests = formData.guests || [];
+  for (var i = 0; i < guests.length; i++) {
+    if (guests[i].meals) {
+      for (var gEvent in guests[i].meals) {
+        mealTotal += Number(guests[i].meals[gEvent].price) || 0;
+      }
+    }
+  }
+  if (mealTotal > 0) {
+    items.push({ name: 'Meals', amount: mealTotal * 100 });
+  }
+
+  // Raffle tickets
+  var raffleCount = Number(formData.raffleTickets) || 0;
+  var rafflePrice = pricing['Raffle Tickets'] ? pricing['Raffle Tickets'].price : 25;
+  var raffleTotal = raffleCount * rafflePrice;
+  if (raffleTotal > 0) {
+    items.push({ name: 'Raffle Tickets (' + raffleCount + ')', amount: raffleTotal * 100 });
+  }
+
+  // Donation
+  if (formData.donation) {
+    var donationAmount = 0;
+    var donationPricing = pricing[formData.donation];
+    if (donationPricing) {
+      donationAmount = donationPricing.price;
+    } else {
+      donationAmount = Number(formData.donation) || 0;
+    }
+    if (donationAmount > 0) {
+      var config = getAllConfig();
+      var donationNote = config['DonationNote'] || 'Tax-deductible. EIN: 91-1167420';
+      items.push({
+        name: 'Donation — $' + donationAmount.toFixed(2) + ' tax-deductible',
+        amount: donationAmount * 100,
+        description: donationNote
+      });
+    }
+  }
+
+  return items;
 }
 
 /**

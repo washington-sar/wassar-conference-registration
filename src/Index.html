@@ -87,7 +87,7 @@
         <div class="form-group">
           <label class="required" id="lbl-email">Email Address</label>
           <div class="hint" id="desc-email">Your confirmation and payment link will be sent here</div>
-          <input type="email" id="email" required>
+          <input type="email" id="email" required onblur="checkExistingRegistration()">
         </div>
         <div class="form-group">
           <label id="lbl-name" class="required">Compatriot Name</label>
@@ -301,12 +301,43 @@
     if (currentStep === 1) buildMealSelections();
     if (currentStep === 3) buildReview();
     showStep(currentStep + 1);
+    updateTotal();
     window.scrollTo(0, 0);
   }
 
   function prevStep() {
     if (currentStep > 0) showStep(currentStep - 1);
     window.scrollTo(0, 0);
+  }
+
+  var _checkedEmail = '';
+  function checkExistingRegistration() {
+    var email = document.getElementById('email').value.trim();
+    if (!email || email === _checkedEmail) return;
+    _checkedEmail = email;
+    google.script.run.withSuccessHandler(function(raw) {
+      var reg = raw ? JSON.parse(raw) : null;
+      if (!reg) return;
+      if (reg.Name) document.getElementById('name').value = reg.Name;
+      if (reg.Phone) document.getElementById('phone').value = reg.Phone;
+      var ch = document.getElementById('chapter');
+      if (ch && reg.Chapter) ch.value = reg.Chapter;
+      if (reg.OfficeTitle) document.getElementById('officeTitle').value = reg.OfficeTitle;
+      if (reg.Lodging) document.getElementById('lodging').value = reg.Lodging;
+      if (reg.AdditionalDetails) document.getElementById('additionalDetails').value = reg.AdditionalDetails;
+      if (reg.RaffleTickets) document.getElementById('raffleTickets').value = reg.RaffleTickets;
+      if (reg.guests && reg.guests.length > 0) {
+        guests = [];
+        for (var i = 0; i < reg.guests.length; i++) {
+          guests.push({ name: reg.guests[i].name || '', email: reg.guests[i].email || '',
+            affiliations: reg.guests[i].affiliations || '', specialMealRequests: reg.guests[i].specialMealRequests || '', meals: {} });
+        }
+        renderGuests();
+      }
+      updateTotal();
+    }).withFailureHandler(function(e) {
+      console.log('Lookup failed: ' + e.message);
+    }).lookupRegistration(email);
   }
 
   function validateContact() {
@@ -467,16 +498,19 @@
   function rr(label, value) { return '<div class="review-row"><span class="review-label">' + esc(label) + ':</span> ' + esc(value) + '</div>'; }
 
   function submitForm() {
+    try {
     var btn = document.getElementById('btnNext'); btn.disabled = true;
     document.getElementById('formContent').style.display = 'none';
     document.getElementById('submitSpinner').className = 'spinner active';
     var ds = document.getElementById('donation');
+    var donationVal = '';
+    if (ds) donationVal = ds.value === 'custom' ? (val('customDonation') || '') : (ds.value || '');
     var data = {
-      email: val('email'), phone: val('phone').replace(/\D/g, ''), name: val('name'),
+      email: val('email'), phone: (val('phone') || '').replace(/\D/g, ''), name: val('name'),
       chapter: val('chapter'), officeTitle: val('officeTitle'), affiliations: getSelectedAffiliations(),
       additionalDetails: val('additionalDetails'), lodging: val('lodging'),
-      registrationCount: 1 + guests.length, specialMealRequests: val('specialMealRequests'),
-      raffleTickets: Number(val('raffleTickets')) || 0, donation: ds.value === 'custom' ? val('customDonation') : ds.value,
+      registrationCount: 1 + guests.length, specialMealRequests: val('specialMealRequests') || '',
+      raffleTickets: Number(val('raffleTickets')) || 0, donation: donationVal,
       meals: window._compatriotMeals || {}, guests: guests
     };
     google.script.run.withSuccessHandler(function(raw) {
@@ -485,8 +519,9 @@
         if (!r) throw new Error('No response');
         if (r.status === 'error') { alert(r.message); resetBtn(btn); return; }
         showConfirm(r);
-      } catch(err) { alert('Error: ' + err.message); resetBtn(btn); }
-    }).withFailureHandler(function(e) { alert('Error: ' + e.message); resetBtn(btn); }).submitRegistration(data);
+      } catch(err) { alert('Parse error: ' + err.message); resetBtn(btn); }
+    }).withFailureHandler(function(e) { alert('Server error: ' + e.message); resetBtn(btn); }).submitRegistration(data);
+    } catch(clientErr) { alert('Client error: ' + clientErr.message); }
   }
 
   function resetBtn(b) { document.getElementById('formContent').style.display = 'block'; document.getElementById('submitSpinner').className = 'spinner'; b.disabled = false; }

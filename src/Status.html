@@ -80,8 +80,9 @@
       .lookupRegistration(email);
   }
 
-  function showResult(reg) {
+  function showResult(raw) {
     document.getElementById('lookupBtn').disabled = false;
+    var reg = raw ? JSON.parse(raw) : null;
 
     if (!reg) {
       document.getElementById('notFound').style.display = 'block';
