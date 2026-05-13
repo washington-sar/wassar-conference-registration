@@ -173,16 +173,20 @@ function handleStripeWebhook(postData) {
         var propKey = (testMode === 'TRUE') ? 'STRIPE_TEST_KEY' : 'STRIPE_SECRET_KEY';
         var secretKey = PropertiesService.getScriptProperties().getProperty(propKey);
         if (secretKey) {
-          var piResp = UrlFetchApp.fetch('https://api.stripe.com/v1/payment_intents/' + piId, {
+          var piResp = UrlFetchApp.fetch('https://api.stripe.com/v1/payment_intents/' + piId + '?expand[]=latest_charge', {
             headers: { 'Authorization': 'Basic ' + Utilities.base64Encode(secretKey + ':') },
             muteHttpExceptions: true
           });
           var pi = JSON.parse(piResp.getContentText());
-          if (pi.charges && pi.charges.data && pi.charges.data[0]) {
-            var card = pi.charges.data[0].payment_method_details && pi.charges.data[0].payment_method_details.card;
-            if (card) {
-              paymentLabel = (card.brand || 'Card').charAt(0).toUpperCase() + (card.brand || '').slice(1) + ' ' + card.last4;
-            }
+          var charge = null;
+          if (pi.latest_charge && typeof pi.latest_charge === 'object') {
+            charge = pi.latest_charge;
+          } else if (pi.charges && pi.charges.data && pi.charges.data[0]) {
+            charge = pi.charges.data[0];
+          }
+          if (charge && charge.payment_method_details && charge.payment_method_details.card) {
+            var card = charge.payment_method_details.card;
+            paymentLabel = (card.brand || 'Card').charAt(0).toUpperCase() + (card.brand || '').slice(1) + ' ' + card.last4;
           }
         }
       }

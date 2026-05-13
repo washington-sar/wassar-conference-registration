@@ -369,9 +369,13 @@
           '<p><strong>Name:</strong> ' + esc(reg.Name) + '</p>' +
           '<p><strong>Status:</strong> ' + esc(reg.PaymentStatus) + '</p>' +
           '<p><strong>Amount Paid:</strong> $' + Number(reg.AmountPaid || reg.TotalDue || 0).toFixed(2) + '</p>' +
-          (reg.Donation && formData.pricing[reg.Donation] ? '<div style="margin-top:12px;padding:12px;background:#fff;border:1px solid #27ae60;border-radius:4px">' +
-            '<p style="margin:0;font-size:13px"><strong>Tax-Deductible Donation:</strong> $' + formData.pricing[reg.Donation].price.toFixed(2) + '</p>' +
-            '<p style="margin:4px 0 0;font-size:12px;color:#555">' + (config.DonationNote || 'EIN: 91-1167420') + '</p></div>' : '') +
+          (reg.Donation ? (function() {
+            var donAmt = formData.pricing[reg.Donation] ? formData.pricing[reg.Donation].price : Number(reg.Donation) || 0;
+            if (!donAmt) return '';
+            return '<div style="margin-top:12px;padding:12px;background:#fff;border:1px solid #27ae60;border-radius:4px">' +
+              '<p style="margin:0;font-size:13px"><strong>Tax-Deductible Donation:</strong> $' + donAmt.toFixed(2) + '</p>' +
+              '<p style="margin:4px 0 0;font-size:12px;color:#555">' + (config.DonationNote || 'EIN: 91-1167420') + '</p></div>';
+          })() : '') +
           '<p style="margin-top:12px;font-size:13px;color:#555">Need to make changes? Contact ' +
           (config.ConferenceContact || 'the conference organizer') + '</p></div>';
         document.getElementById('btnNext').style.display = 'none';
