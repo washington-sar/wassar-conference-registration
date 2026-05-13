@@ -27,21 +27,21 @@ function doGet(e) {
     case 'status':
       var statusHtml = HtmlService.createHtmlOutputFromFile('Status');
       var statusEmail = params.email || '';
-      var statusContent = statusHtml.getContent().replace('/*PARAMS*/', 'var _urlEmail="' + statusEmail.replace(/"/g, '') + '";');
+      var statusContent = statusHtml.getContent().replace('var _INJECTED_PARAMS_ = "PLACEHOLDER";', 'var _urlEmail="' + statusEmail.replace(/"/g, '') + '";');
       return HtmlService.createHtmlOutput(statusContent).setTitle('Registration Status')
         .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
     case 'confirm':
       var confirmHtml = HtmlService.createHtmlOutputFromFile('Confirm');
       confirmHtml.setTitle('Registration Confirmed');
       var confirmEmail = params.email || '';
-      var content = confirmHtml.getContent().replace('/*PARAMS*/', 'var _email="' + confirmEmail.replace(/"/g, '') + '";');
+      var content = confirmHtml.getContent().replace('var _INJECTED_PARAMS_ = "PLACEHOLDER";', 'var _email="' + confirmEmail.replace(/"/g, '') + '";');
       return HtmlService.createHtmlOutput(content).setTitle('Registration Confirmed')
         .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
     default:
       var indexHtml = HtmlService.createHtmlOutputFromFile('Index');
       var indexEmail = params.email || '';
       var formDataJson = getFormData();
-      var indexContent = indexHtml.getContent().replace('/*PARAMS*/',
+      var indexContent = indexHtml.getContent().replace('var _INJECTED_PARAMS_ = "PLACEHOLDER";',
         'var _urlEmail="' + indexEmail.replace(/"/g, '') + '";' +
         'var _inlineFormData=' + formDataJson + ';');
       return HtmlService.createHtmlOutput(indexContent).setTitle('Conference Registration')
