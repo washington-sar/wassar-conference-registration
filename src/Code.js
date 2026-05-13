@@ -55,35 +55,6 @@ function doPost(e) {
   }
 }
 
-// ── Registration Data for the Form ──
-
-/**
- * Run this manually from the editor after changing Config, Meals, Pricing, Fields, Chapters, or Affiliations sheets.
- */
-function regenerateFormData() {
-  var data = JSON.stringify({
-    config: getAllConfig(),
-    meals: getMealOptions(),
-    pricing: getPricing(),
-    fields: getFields(),
-    chapters: getChapters(),
-    affiliations: getAffiliations()
-  });
-  PropertiesService.getScriptProperties().setProperty('FORM_DATA', data);
-  Logger.log('Form data regenerated (' + data.length + ' bytes)');
-}
-
-function getFormData() {
-  var data = PropertiesService.getScriptProperties().getProperty('FORM_DATA');
-  if (!data) {
-    regenerateFormData();
-    data = PropertiesService.getScriptProperties().getProperty('FORM_DATA');
-  }
-  var parsed = JSON.parse(data);
-  try { parsed.isOpen = isRegistrationOpen(); } catch(e) { parsed.isOpen = true; }
-  return JSON.stringify(parsed);
-}
-
 // ── Registration CRUD ──
 
 function generateRegistrationId() {

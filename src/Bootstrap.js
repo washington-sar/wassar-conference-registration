@@ -1,6 +1,10 @@
 /**
- * Setup.gs — Run setupSheets() once to create all tabs with headers and sample data.
- * Run regenerateFormData() after any changes to Config, Meals, Pricing, Fields, Chapters, or Affiliations.
+ * Bootstrap.gs — ONE-TIME setup script. Creates all sheet tabs with headers and sample data.
+ *
+ * WARNING: Running setupSheets() will CLEAR and OVERWRITE all sheet tabs with sample data.
+ * Only run this on a fresh spreadsheet or if you want to start over.
+ *
+ * After running, update the sheets with your actual event data, then run regenerateFormData().
  */
 
 function setupSheets() {
