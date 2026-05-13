@@ -87,7 +87,11 @@
         <div class="form-group">
           <label class="required" id="lbl-email">Email Address</label>
           <div class="hint" id="desc-email">Your confirmation and payment link will be sent here</div>
-          <input type="email" id="email" required onblur="checkExistingRegistration()">
+          <input type="email" id="email" required>
+          <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
+            <button type="button" onclick="checkExistingRegistration()" style="background:#1a5490;color:#fff;border:none;border-radius:4px;padding:8px 16px;cursor:pointer;font-size:13px">Look up previous registration</button>
+          </div>
+          <span id="lookupStatus" style="display:block;font-size:13px;margin-top:6px;color:#666"></span>
         </div>
         <div class="form-group">
           <label id="lbl-name" class="required">Compatriot Name</label>
@@ -181,9 +185,6 @@
         <button class="btn btn-back" id="btnBack" onclick="prevStep()" style="visibility:hidden">Back</button>
         <button class="btn btn-next" id="btnNext" onclick="nextStep()">Next</button>
       </div>
-      <div class="status-link">
-        Already registered? <a href="#" onclick="goToStatus()">Check your status</a>
-      </div>
     </div>
     <div id="submitSpinner" class="spinner">Submitting your registration...</div>
   </div>
@@ -259,13 +260,19 @@
     }
 
     var regPricing = data.pricing['Registration'];
-    if (regPricing) document.getElementById('regPriceHint').textContent = '$' + regPricing.price + ' each';
     var rafflePricing = data.pricing['Raffle Tickets'];
     if (rafflePricing) document.getElementById('rafflePriceHint').textContent = '$' + rafflePricing.price + ' each';
 
     buildDonationOptions(data.pricing);
     buildProgressBar();
     updateTotal();
+
+    // Auto-fill if email passed via URL (from Edit link on status page)
+    var urlEmail = '<?= urlEmail ?>';
+    if (urlEmail) {
+      document.getElementById('email').value = urlEmail;
+      checkExistingRegistration();
+    }
   }
 
   function buildProgressBar() {
@@ -313,11 +320,17 @@
   var _checkedEmail = '';
   function checkExistingRegistration() {
     var email = document.getElementById('email').value.trim();
-    if (!email || email === _checkedEmail) return;
+    if (!email) { alert('Please enter your email first.'); return; }
+    if (email === _checkedEmail) return;
     _checkedEmail = email;
+    var status = document.getElementById('lookupStatus');
+    status.textContent = 'Looking up...';
+    status.style.color = '#666';
     google.script.run.withSuccessHandler(function(raw) {
       var reg = raw ? JSON.parse(raw) : null;
-      if (!reg) return;
+      if (!reg) { status.textContent = 'No previous registration found.'; status.style.color = '#999'; return; }
+      status.textContent = '✓ Found! Fields pre-filled.';
+      status.style.color = '#27ae60';
       if (reg.Name) document.getElementById('name').value = reg.Name;
       if (reg.Phone) document.getElementById('phone').value = reg.Phone;
       var ch = document.getElementById('chapter');
@@ -325,7 +338,25 @@
       if (reg.OfficeTitle) document.getElementById('officeTitle').value = reg.OfficeTitle;
       if (reg.Lodging) document.getElementById('lodging').value = reg.Lodging;
       if (reg.AdditionalDetails) document.getElementById('additionalDetails').value = reg.AdditionalDetails;
+      if (reg.SpecialMealRequests) document.getElementById('specialMealRequests').value = reg.SpecialMealRequests;
       if (reg.RaffleTickets) document.getElementById('raffleTickets').value = reg.RaffleTickets;
+      // Restore affiliations checkboxes
+      if (reg.Affiliations) {
+        var affils = reg.Affiliations.split(',');
+        for (var a = 0; a < affils.length; a++) {
+          var val = affils[a].trim();
+          var cb = document.querySelector('#affiliationOptions input[value="' + val + '"]');
+          if (cb) cb.checked = true;
+        }
+      }
+      // Restore donation
+      if (reg.Donation) {
+        var dd = document.getElementById('donation');
+        if (dd) {
+          dd.value = reg.Donation;
+          if (dd.value !== reg.Donation) { dd.value = 'custom'; document.getElementById('customDonation').style.display = 'block'; document.getElementById('customDonation').value = reg.Donation; }
+        }
+      }
       if (reg.guests && reg.guests.length > 0) {
         guests = [];
         for (var i = 0; i < reg.guests.length; i++) {
@@ -334,9 +365,18 @@
         }
         renderGuests();
       }
+      // Restore meal selections
+      if (reg.MealSelections) {
+        try {
+          var meals = typeof reg.MealSelections === 'string' ? JSON.parse(reg.MealSelections) : reg.MealSelections;
+          window._compatriotMeals = meals;
+          window._savedMeals = meals;
+        } catch(me) {}
+      }
       updateTotal();
     }).withFailureHandler(function(e) {
-      console.log('Lookup failed: ' + e.message);
+      status.textContent = 'Lookup failed: ' + e.message;
+      status.style.color = '#c0392b';
     }).lookupRegistration(email);
   }
 
@@ -381,26 +421,29 @@
   function buildMealSelections() {
     var container = document.getElementById('mealSelections');
     container.innerHTML = '';
+    var saved = window._savedMeals || {};
     for (var event in formData.meals) {
       var options = formData.meals[event];
       var html = '<div class="meal-event"><h4>' + esc(event) + '</h4>';
-      html += '<div class="meal-person">Compatriot:</div>' + buildMealSelect('compatriot', event, options);
+      var savedOption = saved[event] ? saved[event].option : '';
+      html += '<div class="meal-person">Compatriot:</div>' + buildMealSelect('compatriot', event, options, savedOption);
       for (var i = 0; i < guests.length; i++) {
         html += '<div class="meal-person">' + esc(guests[i].name || 'Guest ' + (i+1)) + ':</div>' +
-          buildMealSelect('guest-' + i, event, options);
+          buildMealSelect('guest-' + i, event, options, '');
       }
       html += '</div>';
       container.innerHTML += html;
     }
   }
 
-  function buildMealSelect(person, event, options) {
+  function buildMealSelect(person, event, options, selectedOption) {
     var id = 'meal-' + person + '-' + event.replace(/[^a-zA-Z0-9]/g, '_');
     var html = '<select id="' + id + '" style="margin-bottom:4px" onchange="onMealChange(\'' +
       person + '\',\'' + esc(event) + '\',this);updateTotal()">';
     html += '<option value="">No Meal ($0)</option>';
     for (var i = 0; i < options.length; i++) {
-      html += '<option value="' + options[i].price + '" data-option="' + esc(options[i].option) + '">' +
+      var sel = (selectedOption && options[i].option === selectedOption) ? ' selected' : '';
+      html += '<option value="' + options[i].price + '" data-option="' + esc(options[i].option) + '"' + sel + '>' +
         esc(options[i].option) + ' ($' + options[i].price + ')</option>';
     }
     return html + '</select>';
@@ -421,11 +464,19 @@
 
   function buildDonationOptions(pricing) {
     var container = document.getElementById('donationOptions');
-    var html = '<select id="donation" onchange="updateTotal()"><option value="">No Donation</option>';
+    var donationKeys = [];
     for (var key in pricing) {
-      if (key.startsWith('Donation')) {
-        html += '<option value="' + key + '">' + pricing[key].description + ' ($' + pricing[key].price + ')</option>';
-      }
+      if (key.toLowerCase().indexOf('donation') >= 0) donationKeys.push(key);
+    }
+    if (donationKeys.length === 0) {
+      container.innerHTML = '<p style="color:#c00;font-size:12px">No donation options found. Keys: [' + Object.keys(pricing).join('] [') + ']</p>';
+      return;
+    }
+    var html = '<select id="donation" onchange="updateTotal()"><option value="">No Donation</option>';
+    for (var i = 0; i < donationKeys.length; i++) {
+      var k = donationKeys[i];
+      var label = pricing[k].description || k;
+      html += '<option value="' + k + '">' + label + ' ($' + pricing[k].price + ')</option>';
     }
     html += '<option value="custom">Custom Amount...</option></select>';
     html += '<input type="number" id="customDonation" min="0" placeholder="Enter amount" style="display:none;margin-top:8px" onchange="updateTotal()">';
@@ -528,8 +579,8 @@
 
   function showConfirm(r) {
     document.getElementById('submitSpinner').className = 'spinner';
-    document.querySelector('.container').innerHTML =
-      '<div class="header"><h1>Registration Confirmed!</h1></div><div style="padding:24px">' +
+    var config = formData.config;
+    var html = '<div class="header"><h1>Registration Confirmed!</h1></div><div style="padding:24px">' +
       '<div style="background:#f0f8ff;padding:15px;border-left:4px solid #1a5490;margin:20px 0">' +
       '<strong>Registration ID:</strong> ' + esc(r.registrationId) + '</div>' +
       '<table style="border-collapse:collapse;margin:20px 0;width:100%;max-width:400px">' +
@@ -539,17 +590,52 @@
       '<td style="padding:10px 20px;background:#f0abbc;border:1px solid #9d1736;font-size:18px"><strong>$' + r.totalWithFees.toFixed(2) + '</strong><br>' +
       '<span style="font-size:12px;color:#666">includes $' + r.fees.toFixed(2) + ' fee</span></td></tr></table>' +
       '<p>A confirmation email with payment instructions has been sent to your email address.</p>' +
-      (r.stripeUrl ? '<p style="margin-top:16px"><a href="' + r.stripeUrl + '" target="_blank" ' +
-        'style="display:inline-block;background:#1a5490;color:#fff;padding:12px 30px;text-decoration:none;border-radius:5px;font-weight:bold">Pay with Credit Card</a></p>' : '') +
+      '<h3 style="margin-top:24px;color:#1a5490">Payment Options</h3>' +
+      '<div style="display:flex;flex-wrap:wrap;gap:12px;margin-top:12px">' +
+      '<button onclick="showPaymentInfo(\'check\')" style="flex:1;min-width:140px;padding:14px;background:#1a5490;color:#fff;border:none;border-radius:5px;font-weight:bold;cursor:pointer;font-size:14px">✉️ Mail a Check</button>' +
+      '<button onclick="showPaymentInfo(\'zelle\')" style="flex:1;min-width:140px;padding:14px;background:#6c3a9e;color:#fff;border:none;border-radius:5px;font-weight:bold;cursor:pointer;font-size:14px">💸 Send Zelle</button>' +
+      (r.stripeUrl ? '<a href="' + r.stripeUrl + '" target="_blank" style="flex:1;min-width:140px;padding:14px;background:#27ae60;color:#fff;border:none;border-radius:5px;font-weight:bold;cursor:pointer;font-size:14px;text-decoration:none;text-align:center;display:block">💳 Pay with Card</a>' : '') +
+      '</div>' +
+      '<div id="paymentInfo" style="margin-top:16px;display:none"></div>' +
       '</div>';
+    document.querySelector('.container').innerHTML = html;
+    window._confirmConfig = config;
+    window._confirmRegId = r.registrationId;
+  }
+
+  function showPaymentInfo(method) {
+    var config = window._confirmConfig || {};
+    var regId = window._confirmRegId || '';
+    var el = document.getElementById('paymentInfo');
+    el.style.display = 'block';
+    if (method === 'check') {
+      el.innerHTML = '<div style="background:#f9f9f9;padding:16px;border-radius:4px">' +
+        '<h4 style="color:#1a5490;margin-bottom:8px">Mail a Check</h4>' +
+        '<p>Make checks payable to: <strong>' + (config.CheckPayableTo || 'Washington SAR') + '</strong></p>' +
+        '<p>Include Registration ID <strong>' + regId + '</strong> in the memo</p>' +
+        '<p style="margin-top:8px">Mail to:<br><strong>' + (config.MailTo || '').replace(/\n/g, '<br>') + '</strong></p></div>';
+    } else {
+      var qrHtml = '';
+      if (config.ZelleQR) {
+        var qrId = config.ZelleQR.match(/[-\w]{25,}/);
+        var qrUrl = qrId ? 'https://lh3.googleusercontent.com/d/' + qrId[0] + '=s400' : config.ZelleQR;
+        qrHtml = '<p style="margin-top:8px"><img src="' + qrUrl + '" style="max-width:300px;width:100%"></p>';
+      }
+      el.innerHTML = '<div style="background:#f9f9f9;padding:16px;border-radius:4px">' +
+        '<h4 style="color:#6c3a9e;margin-bottom:8px">Send via Zelle</h4>' +
+        '<p>Send to: <strong>' + (config.PaymentEmail || '') + '</strong></p>' +
+        '<p>Include Registration ID <strong>' + regId + '</strong> in the memo</p>' +
+        qrHtml + '</div>';
+    }
   }
 
   function val(id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; }
   function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
   function goToStatus() {
-    google.script.run.withSuccessHandler(function(u) { window.open(u + '?page=status', '_blank'); })
-      .withFailureHandler(function() { window.open(window.location.href.replace(/page=[^&]*/, 'page=status'), '_blank'); })
-      .getScriptUrl();
+    var email = document.getElementById('email').value.trim();
+    google.script.run.withSuccessHandler(function(u) {
+      window.open(u + '?page=status&email=' + encodeURIComponent(email), '_top');
+    }).getScriptUrl();
   }
 </script>
 </body>

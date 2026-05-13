@@ -137,7 +137,7 @@
     }
 
     // Edit link if registration is still open
-    if (reg.isOpen) {
+    if (reg.isOpen && !isPaid) {
       html += '<div class="edit-link"><a href="#" onclick="goToEdit()">Edit Registration</a></div>';
     }
 
@@ -159,15 +159,21 @@
   }
 
   function goToEdit() {
-    // Navigate back to the registration form — the form will detect existing registration by email
+    var email = document.getElementById('lookupEmail').value.trim();
     google.script.run
       .withSuccessHandler(function(url) {
-        window.open(url, '_top');
+        window.open(url + '?email=' + encodeURIComponent(email), '_top');
       })
       .withFailureHandler(function() {
         window.location.href = window.location.href.replace('page=status', 'page=index');
       })
       .getScriptUrl();
+  }
+  // Auto-lookup if email passed in URL
+  var urlEmail = '<?= urlEmail ?>';
+  if (urlEmail) {
+    document.getElementById('lookupEmail').value = urlEmail;
+    lookup();
   }
 </script>
 </body>

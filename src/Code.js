@@ -8,22 +8,37 @@ function getScriptUrl() {
   return ScriptApp.getService().getUrl();
 }
 
+function getEmailForRegistration(registrationId) {
+  if (!registrationId) return '';
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Registrations');
+  var data = sheet.getDataRange().getValues();
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] === registrationId) return data[i][2] || '';
+  }
+  return '';
+}
+
 // ── HTTP Handlers ──
 
 function doGet(e) {
   var page = (e && e.parameter && e.parameter.page) || 'index';
+  var params = e && e.parameter ? e.parameter : {};
+  var template;
   switch (page) {
     case 'status':
-      return HtmlService.createHtmlOutputFromFile('Status')
-        .setTitle('Registration Status')
+      template = HtmlService.createTemplateFromFile('Status');
+      template.urlEmail = params.email || '';
+      return template.evaluate().setTitle('Registration Status')
         .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
     case 'confirm':
-      return HtmlService.createHtmlOutputFromFile('Confirm')
-        .setTitle('Registration Confirmed')
+      template = HtmlService.createTemplateFromFile('Confirm');
+      template.regId = params.reg_id || '';
+      return template.evaluate().setTitle('Registration Confirmed')
         .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
     default:
-      return HtmlService.createHtmlOutputFromFile('Index')
-        .setTitle('Conference Registration')
+      template = HtmlService.createTemplateFromFile('Index');
+      template.urlEmail = params.email || '';
+      return template.evaluate().setTitle('Conference Registration')
         .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
 }
@@ -133,7 +148,8 @@ function appendRegistrationRow(sheet, registrationId, data) {
     data.donation || '',
     calculateTotal(data),
     'Unpaid',
-    0
+    0,
+    JSON.stringify(data.meals || {})
   ]);
 }
 
@@ -155,7 +171,8 @@ function updateRegistrationRow(sheet, row, registrationId, data) {
     data.donation || '',
     calculateTotal(data),
     sheet.getRange(row, 16).getValue(), // preserve payment status
-    sheet.getRange(row, 17).getValue()  // preserve amount paid
+    sheet.getRange(row, 17).getValue(), // preserve amount paid
+    JSON.stringify(data.meals || {})
   ];
   sheet.getRange(row, 1, 1, values.length).setValues([values]);
 }

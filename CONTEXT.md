@@ -49,32 +49,57 @@ The `.clasp.json` is in `src/` (not repo root). Always use `--force` on push.
 
 ## What's Done
 - Multi-step registration form (Contact → Guests → Meals → Extras → Review)
-- Live running total updates as selections change (fixed: now updates on step navigation)
+- Live running total updates as selections change (updates on step navigation)
 - Chapter dropdown and affiliations checkboxes populated from sheets
 - Configurable field labels/descriptions from Fields sheet
 - Auto-calculated registration count (1 + number of guests)
 - Special meal requests on the Meals step (not Extras)
-- Donation note (tax-deductible/EIN 91-1167420) from Config
-- Stripe Checkout Sessions API integration (itemized cart: registration, meals, raffle, donation w/ EIN, CC fee)
+- Donation options from Pricing sheet (Patron/Patriot/Minuteman + Custom Amount)
+- Donation note with EIN 91-1167420 from Config
+- Stripe Checkout Sessions API integration (itemized cart with CC fee)
 - StripeTestMode toggle in Config sheet (uses STRIPE_TEST_KEY or STRIPE_SECRET_KEY from Script Properties)
-- Confirmation emails (plain text + HTML) matching the style of the 2026 emails
-- Status lookup page by email (fixed: JSON.stringify/parse for google.script.run serialization)
+- Confirmation page with 3 payment buttons: Mail a Check, Send Zelle (with QR), Pay with Card
+- Post-Stripe redirect shows green "Payment Received" page
+- Confirmation emails (plain text + HTML) with payment instructions
+- Status lookup page by email (auto-lookup via URL parameter)
 - Stripe webhook handler (`doPost`) for automatic payment reconciliation
 - Manual payment recording function for Zelle/check
 - Registration editing (same email overwrites existing row)
 - Registration cutoff date support
-- Pre-fill form from existing registration on email blur (partial — triggers after tabbing out of email field)
+- Pre-fill form from existing registration via "Look up previous registration" button
+- Restores: name, phone, chapter, office/title, lodging, affiliations, raffle, donation, special requests, guests
+- Edit link hidden on Status page when registration is paid
 - Error isolation: Stripe/email failures don't block registration submission
+- Templated HTML for URL parameter passing between pages
+- Anonymous access (ANYONE_ANONYMOUS) for Stripe webhook POST
 
-## What's Next
-1. **Stripe webhook setup**: In Stripe Dashboard → Developers → Webhooks, add endpoint pointing to the web app URL, listening for `checkout.session.completed`. This enables automatic payment status updates.
-2. **Improve pre-fill UX**: Currently triggers on email blur. Could add a "Look up" button or trigger on Enter key for better discoverability.
-3. **Pre-fill form on edit from Status page**: Status page "Edit" link navigates to form but doesn't pass the email to auto-trigger lookup.
-4. **Payment instructions on confirmation page**: Show Zelle/check/mail details on the confirmation screen (currently only in the email).
-5. **Hotel reservation link**: Config has `LodgingNote` field — update with actual hotel booking link.
-6. **Customize sheet data**: Update Chapters, Affiliations, Meals, Pricing tabs with actual 2027 conference data.
-7. **End-to-end testing**: Verify webhook with Stripe test mode, test status lookup shows paid after webhook fires.
-8. **Admin dashboard**: Optional — summary view of registered/paid/unpaid counts.
+## What's Next / TODOs
+1. **Combine Registration+Meals into one Stripe line item** — keeps it to 4 items max (Reg+Meals, Raffle, Donation, CC Fee) matching budget categories
+2. **Add "Check registration status" button** — second button on first page alongside "Look up previous registration", goes directly to status page with email pre-filled
+3. **Fix meal pre-fill on lookup** — meals are now stored as JSON in MealSelections column (col R), but need to add the `MealSelections` header to the Registrations sheet. Code already saves/restores them.
+4. **Raffle price hint** — add back the "$25 each" hint text (element id was missing)
+5. **Stripe receipt emails** — enable in Stripe Dashboard → Settings → Emails → Successful payments (only works in live mode)
+6. **View Registration Status link on Confirm page** — currently broken, needs testing after template fix
+
+## Go-Live Checklist
+When ready to switch from test to production:
+1. Create a new Stripe account (or use existing) and complete activation/verification
+2. In Script Properties, add `STRIPE_SECRET_KEY` with the live `sk_live_...` key
+3. In Config sheet, change `StripeTestMode` from `TRUE` to `FALSE`
+4. In Stripe Dashboard (live mode), create a webhook endpoint:
+   - URL: `https://script.google.com/macros/s/AKfycbw1YMCC6oUsruVPvPmRLVLBMr5Mbbog9T1EWX9DQpaJVMkmBeEzjhSHzSwOq3esk78D/exec`
+   - Event: `checkout.session.completed`
+5. Enable receipt emails: Stripe Dashboard → Settings → Emails → Successful payments
+6. Update Chapters, Affiliations, Meals, Pricing tabs with actual conference data
+7. Set RegistrationCutoff date in Config sheet
+8. Test end-to-end with a real card (can refund immediately after)
+
+## Google Sheet Setup Notes
+- **Registrations sheet** needs `MealSelections` header in column R (18th column) for meal pre-fill to work
+- **Pricing sheet** items starting with "Donation" appear as donation options (case-insensitive match)
+- **Meals sheet** row order determines display order (put Saturday Lunch before Saturday Banquet)
+- **Config sheet** keys: StripeTestMode, ZelleQR (Google Drive file ID URL), DonationNote, PaymentEmail, CheckPayableTo, MailTo, ConferenceContact, PaymentContact, EventName, EventDates, LodgingNote, RegistrationCutoff, RegistrationPrefix
+- **Script Properties** (separate from sheet, only visible to script editors): STRIPE_TEST_KEY, STRIPE_SECRET_KEY
 
 ## Original System Reference
 The 2026 conference used a Google Form with Apps Script. The form questions and email format are documented in the chat history. Key differences from old system:

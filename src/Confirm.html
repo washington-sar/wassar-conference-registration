@@ -15,21 +15,24 @@
 <body>
   <div class="container">
     <div class="header">
-      <h1>Registration Confirmed!</h1>
+      <h1>✓ Payment Received!</h1>
     </div>
     <div class="content">
-      <p>Your registration has been submitted. A confirmation email with payment instructions
-        has been sent to your email address.</p>
+      <p style="font-size:16px">Thank you! Your credit card payment has been processed successfully.</p>
+      <p style="margin-top:12px;color:#666">Your registration status will be updated shortly.</p>
       <p style="margin-top:20px">
-        <a href="#" class="btn" style="color:#fff" onclick="goToStatus()">Check Registration Status</a>
+        <a id="statusLink" href="#" class="btn" style="color:#fff" onclick="goToStatus(); return false;">View Registration Status</a>
       </p>
     </div>
   </div>
 <script>
+  var regId = '<?= regId ?>';
   function goToStatus() {
-    google.script.run
-      .withSuccessHandler(function(url) { window.open(url + '?page=status', '_top'); })
-      .getScriptUrl();
+    google.script.run.withSuccessHandler(function(email) {
+      google.script.run.withSuccessHandler(function(url) {
+        window.open(url + '?page=status&email=' + encodeURIComponent(email || ''), '_top');
+      }).getScriptUrl();
+    }).getEmailForRegistration(regId);
   }
 </script>
 </body>

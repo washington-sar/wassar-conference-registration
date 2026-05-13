@@ -46,10 +46,16 @@ function getMealOptions() {
 
 function getPricing() {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Pricing');
+  if (!sheet) {
+    // Try common variations
+    sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('pricing');
+    if (!sheet) return {};
+  }
   var data = sheet.getDataRange().getValues();
   var pricing = {};
   for (var i = 1; i < data.length; i++) { // skip header
-    pricing[data[i][0]] = { price: data[i][1], description: data[i][2] || '' };
+    var key = String(data[i][0]).trim();
+    if (key) pricing[key] = { price: Number(data[i][1]) || 0, description: String(data[i][2] || '') };
   }
   return pricing;
 }

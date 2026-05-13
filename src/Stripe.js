@@ -35,6 +35,18 @@ function createStripeUrl(stripeAmount, registrationId, email, formData) {
 
   // Build itemized line items
   var items = buildLineItems(formData);
+
+  // Find donation amount for receipt metadata
+  var donationAmount = 0;
+  for (var d = 0; d < items.length; d++) {
+    if (items[d].name.indexOf('Donation') === 0) donationAmount = items[d].amount / 100;
+  }
+  if (donationAmount > 0) {
+    payload['payment_intent_data[metadata][tax_deductible_amount]'] = '$' + donationAmount.toFixed(2);
+    payload['payment_intent_data[metadata][ein]'] = '91-1167420';
+    payload['payment_intent_data[description]'] = 'WSSAR Conference Registration (includes $' + donationAmount.toFixed(2) + ' tax-deductible donation, EIN 91-1167420)';
+  }
+
   // Add CC fee as final line item
   var subtotal = 0;
   for (var i = 0; i < items.length; i++) subtotal += items[i].amount;
