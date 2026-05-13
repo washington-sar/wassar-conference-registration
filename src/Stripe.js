@@ -21,7 +21,7 @@ function createStripeUrl(stripeAmount, registrationId, email, formData) {
     if (!secretKey) return '';
 
   var config = getAllConfig();
-  var successUrl = getScriptUrl() + '?page=confirm&reg_id=' + registrationId;
+  var successUrl = getScriptUrl() + '?page=confirm&reg_id=' + registrationId + '&email=' + encodeURIComponent(email);
   var cancelUrl = getScriptUrl() + '?page=status';
 
   var payload = {
@@ -85,31 +85,25 @@ function buildLineItems(formData) {
   var pricing = getPricing();
   var items = [];
 
-  // Registration
+  // Registration + Meals combined
   var regCount = Number(formData.registrationCount) || 1;
   var regPrice = pricing['Registration'] ? pricing['Registration'].price : 15;
-  var regTotal = regCount * regPrice;
-  if (regTotal > 0) {
-    items.push({ name: 'Registration (' + regCount + ')', amount: regTotal * 100 });
-  }
-
-  // Meals (compatriot + guests combined)
-  var mealTotal = 0;
+  var regMealTotal = regCount * regPrice;
   if (formData.meals) {
     for (var event in formData.meals) {
-      mealTotal += Number(formData.meals[event].price) || 0;
+      regMealTotal += Number(formData.meals[event].price) || 0;
     }
   }
   var guests = formData.guests || [];
   for (var i = 0; i < guests.length; i++) {
     if (guests[i].meals) {
       for (var gEvent in guests[i].meals) {
-        mealTotal += Number(guests[i].meals[gEvent].price) || 0;
+        regMealTotal += Number(guests[i].meals[gEvent].price) || 0;
       }
     }
   }
-  if (mealTotal > 0) {
-    items.push({ name: 'Meals', amount: mealTotal * 100 });
+  if (regMealTotal > 0) {
+    items.push({ name: 'Registration & Meals', amount: regMealTotal * 100 });
   }
 
   // Raffle tickets

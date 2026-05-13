@@ -81,18 +81,27 @@
     <div id="formContent" style="display:none">
       <div class="progress" id="progressBar"></div>
 
-      <!-- Step 1: Contact Info + Registration Count -->
+      <!-- Step 0: Email -->
       <div class="form-section active" data-step="0">
-        <h3>Contact Information</h3>
+        <h3>Enter Your Email Address</h3>
+        <p style="margin-bottom:16px;font-size:14px;color:#555">
+          Your email is your registration ID. All confirmations and payment links will be sent to this address.
+          Look for emails from <strong>registration@washingtonsar.org</strong>.
+        </p>
         <div class="form-group">
           <label class="required" id="lbl-email">Email Address</label>
-          <div class="hint" id="desc-email">Your confirmation and payment link will be sent here</div>
-          <input type="email" id="email" required>
-          <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">
-            <button type="button" onclick="checkExistingRegistration()" style="background:#1a5490;color:#fff;border:none;border-radius:4px;padding:8px 16px;cursor:pointer;font-size:13px">Look up previous registration</button>
-          </div>
-          <span id="lookupStatus" style="display:block;font-size:13px;margin-top:6px;color:#666"></span>
+          <input type="email" id="email" required style="font-size:16px;padding:12px"
+            onkeypress="if(event.key==='Enter'){event.preventDefault();emailContinue();}">
         </div>
+        <div id="emailStatus" style="display:none"></div>
+      </div>
+
+      <!-- Step 1: Contact Info -->
+      <div class="form-section" data-step="1">
+        <div id="prefillBanner" style="display:none;background:#d4edda;border:1px solid #27ae60;border-radius:4px;padding:12px 16px;margin-bottom:16px;font-size:14px;color:#155724">
+          ✓ Your previous registration has been loaded. Review and update as needed.
+        </div>
+        <h3>Contact Information</h3>
         <div class="form-group">
           <label id="lbl-name" class="required">Compatriot Name</label>
           <div class="hint" id="desc-name"></div>
@@ -132,7 +141,7 @@
       </div>
 
       <!-- Step 2: Guests -->
-      <div class="form-section" data-step="1">
+      <div class="form-section" data-step="2">
         <h3>Guest Information</h3>
         <p style="margin-bottom:16px;font-size:14px;color:#666">
           Add any guests attending with you. Each guest can select their own meals.
@@ -142,7 +151,7 @@
       </div>
 
       <!-- Step 3: Meals + Special Requests -->
-      <div class="form-section" data-step="2">
+      <div class="form-section" data-step="3">
         <h3>Meal Selections</h3>
         <div id="mealSelections"></div>
         <div class="form-group" style="margin-top:16px">
@@ -153,7 +162,7 @@
       </div>
 
       <!-- Step 4: Extras (raffle + donation) -->
-      <div class="form-section" data-step="3">
+      <div class="form-section" data-step="4">
         <h3>Extras</h3>
         <div class="form-group">
           <label>Raffle Tickets</label>
@@ -172,7 +181,7 @@
       </div>
 
       <!-- Step 5: Review -->
-      <div class="form-section" data-step="4">
+      <div class="form-section" data-step="5">
         <h3>Review Your Registration</h3>
         <div id="reviewContent"></div>
         <div class="running-total">
@@ -190,10 +199,11 @@
   </div>
 
 <script>
+  /*PARAMS*/
   var formData = null;
   var currentStep = 0;
-  var totalSteps = 5;
-  var stepNames = ['Contact', 'Guests', 'Meals', 'Extras', 'Review'];
+  var totalSteps = 6;
+  var stepNames = ['Email', 'Contact', 'Guests', 'Meals', 'Extras', 'Review'];
   var guests = [];
 
   google.script.run
@@ -268,10 +278,10 @@
     updateTotal();
 
     // Auto-fill if email passed via URL (from Edit link on status page)
-    var urlEmail = '<?= urlEmail ?>';
+    var urlEmail = window._urlEmail || '';
     if (urlEmail) {
       document.getElementById('email').value = urlEmail;
-      checkExistingRegistration();
+      emailContinue();
     }
   }
 
@@ -293,9 +303,13 @@
     buildProgressBar();
     document.getElementById('btnBack').style.visibility = step === 0 ? 'hidden' : 'visible';
     var btnNext = document.getElementById('btnNext');
+    btnNext.style.display = 'inline-block';
     if (step === totalSteps - 1) {
       btnNext.textContent = 'Submit Registration';
       btnNext.className = 'btn btn-submit';
+    } else if (step === 0) {
+      btnNext.textContent = 'Continue';
+      btnNext.className = 'btn btn-next';
     } else {
       btnNext.textContent = 'Next';
       btnNext.className = 'btn btn-next';
@@ -303,10 +317,11 @@
   }
 
   function nextStep() {
-    if (currentStep === 0 && !validateContact()) return;
+    if (currentStep === 0) { emailContinue(); return; }
+    if (currentStep === 1 && !validateContact()) return;
     if (currentStep === totalSteps - 1) { submitForm(); return; }
-    if (currentStep === 1) buildMealSelections();
-    if (currentStep === 3) buildReview();
+    if (currentStep === 2) buildMealSelections();
+    if (currentStep === 4) buildReview();
     showStep(currentStep + 1);
     updateTotal();
     window.scrollTo(0, 0);
@@ -317,73 +332,99 @@
     window.scrollTo(0, 0);
   }
 
-  var _checkedEmail = '';
-  function checkExistingRegistration() {
+  function emailContinue() {
     var email = document.getElementById('email').value.trim();
-    if (!email) { alert('Please enter your email first.'); return; }
-    if (email === _checkedEmail) return;
-    _checkedEmail = email;
-    var status = document.getElementById('lookupStatus');
-    status.textContent = 'Looking up...';
-    status.style.color = '#666';
+    if (!email) { alert('Please enter your email address.'); return; }
+    var statusEl = document.getElementById('emailStatus');
+    statusEl.style.display = 'block';
+    statusEl.innerHTML = '<p style="color:#666">Looking up your registration...</p>';
+    document.getElementById('btnNext').disabled = true;
+
     google.script.run.withSuccessHandler(function(raw) {
+      document.getElementById('btnNext').disabled = false;
       var reg = raw ? JSON.parse(raw) : null;
-      if (!reg) { status.textContent = 'No previous registration found.'; status.style.color = '#999'; return; }
-      status.textContent = '✓ Found! Fields pre-filled.';
-      status.style.color = '#27ae60';
-      if (reg.Name) document.getElementById('name').value = reg.Name;
-      if (reg.Phone) document.getElementById('phone').value = reg.Phone;
-      var ch = document.getElementById('chapter');
-      if (ch && reg.Chapter) ch.value = reg.Chapter;
-      if (reg.OfficeTitle) document.getElementById('officeTitle').value = reg.OfficeTitle;
-      if (reg.Lodging) document.getElementById('lodging').value = reg.Lodging;
-      if (reg.AdditionalDetails) document.getElementById('additionalDetails').value = reg.AdditionalDetails;
-      if (reg.SpecialMealRequests) document.getElementById('specialMealRequests').value = reg.SpecialMealRequests;
-      if (reg.RaffleTickets) document.getElementById('raffleTickets').value = reg.RaffleTickets;
-      // Restore affiliations checkboxes
-      if (reg.Affiliations) {
-        var affils = reg.Affiliations.split(',');
-        for (var a = 0; a < affils.length; a++) {
-          var val = affils[a].trim();
-          var cb = document.querySelector('#affiliationOptions input[value="' + val + '"]');
-          if (cb) cb.checked = true;
-        }
+      if (!reg) {
+        // New registration — proceed to contact
+        statusEl.style.display = 'none';
+        document.getElementById('prefillBanner').style.display = 'block';
+        document.getElementById('prefillBanner').style.background = '#f0f8ff';
+        document.getElementById('prefillBanner').style.borderColor = '#1a5490';
+        document.getElementById('prefillBanner').style.color = '#1a5490';
+        document.getElementById('prefillBanner').textContent = 'No existing registration found. Starting a new one!';
+        showStep(1);
+        window.scrollTo(0, 0);
+      } else if (reg.PaymentStatus && reg.PaymentStatus.toString().toLowerCase().indexOf('paid') >= 0 && reg.PaymentStatus.toString().toLowerCase().indexOf('unpaid') < 0) {
+        // Paid — show status inline, no editing
+        var config = formData.config;
+        statusEl.innerHTML = '<div style="background:#d4edda;border:1px solid #27ae60;border-radius:4px;padding:16px;margin-top:12px">' +
+          '<h3 style="color:#155724;margin-bottom:8px">✓ Registration Complete & Paid</h3>' +
+          '<p><strong>Registration ID:</strong> ' + esc(reg.RegistrationID) + '</p>' +
+          '<p><strong>Name:</strong> ' + esc(reg.Name) + '</p>' +
+          '<p><strong>Status:</strong> ' + esc(reg.PaymentStatus) + '</p>' +
+          '<p style="margin-top:12px;font-size:13px;color:#555">Need to make changes? Contact ' +
+          (config.ConferenceContact || 'the conference organizer') + '</p></div>';
+        document.getElementById('btnNext').style.display = 'none';
+        document.getElementById('btnBack').style.visibility = 'hidden';
+      } else {
+        // Unpaid — pre-fill and proceed
+        statusEl.style.display = 'none';
+        prefillForm(reg);
+        document.getElementById('prefillBanner').style.display = 'block';
+        showStep(1);
+        window.scrollTo(0, 0);
       }
-      // Restore donation
-      if (reg.Donation) {
-        var dd = document.getElementById('donation');
-        if (dd) {
-          dd.value = reg.Donation;
-          if (dd.value !== reg.Donation) { dd.value = 'custom'; document.getElementById('customDonation').style.display = 'block'; document.getElementById('customDonation').value = reg.Donation; }
-        }
-      }
-      if (reg.guests && reg.guests.length > 0) {
-        guests = [];
-        for (var i = 0; i < reg.guests.length; i++) {
-          guests.push({ name: reg.guests[i].name || '', email: reg.guests[i].email || '',
-            affiliations: reg.guests[i].affiliations || '', specialMealRequests: reg.guests[i].specialMealRequests || '', meals: {} });
-        }
-        renderGuests();
-      }
-      // Restore meal selections
-      if (reg.MealSelections) {
-        try {
-          var meals = typeof reg.MealSelections === 'string' ? JSON.parse(reg.MealSelections) : reg.MealSelections;
-          window._compatriotMeals = meals;
-          window._savedMeals = meals;
-        } catch(me) {}
-      }
-      updateTotal();
     }).withFailureHandler(function(e) {
-      status.textContent = 'Lookup failed: ' + e.message;
-      status.style.color = '#c0392b';
+      document.getElementById('btnNext').disabled = false;
+      statusEl.innerHTML = '<p style="color:#c00">Error: ' + e.message + '</p>';
     }).lookupRegistration(email);
   }
 
+  function prefillForm(reg) {
+    if (reg.Name) document.getElementById('name').value = reg.Name;
+    if (reg.Phone) document.getElementById('phone').value = reg.Phone;
+    var ch = document.getElementById('chapter');
+    if (ch && reg.Chapter) ch.value = reg.Chapter;
+    if (reg.OfficeTitle) document.getElementById('officeTitle').value = reg.OfficeTitle;
+    if (reg.Lodging) document.getElementById('lodging').value = reg.Lodging;
+    if (reg.AdditionalDetails) document.getElementById('additionalDetails').value = reg.AdditionalDetails;
+    if (reg.SpecialMealRequests) document.getElementById('specialMealRequests').value = reg.SpecialMealRequests;
+    if (reg.RaffleTickets) document.getElementById('raffleTickets').value = reg.RaffleTickets;
+    if (reg.Affiliations) {
+      var affils = reg.Affiliations.split(',');
+      for (var a = 0; a < affils.length; a++) {
+        var v = affils[a].trim();
+        var cb = document.querySelector('#affiliationOptions input[value="' + v + '"]');
+        if (cb) cb.checked = true;
+      }
+    }
+    if (reg.Donation) {
+      var dd = document.getElementById('donation');
+      if (dd) {
+        dd.value = reg.Donation;
+        if (dd.value !== reg.Donation) { dd.value = 'custom'; document.getElementById('customDonation').style.display = 'block'; document.getElementById('customDonation').value = reg.Donation; }
+      }
+    }
+    if (reg.guests && reg.guests.length > 0) {
+      guests = [];
+      for (var i = 0; i < reg.guests.length; i++) {
+        guests.push({ name: reg.guests[i].name || '', email: reg.guests[i].email || '',
+          affiliations: reg.guests[i].affiliations || '', specialMealRequests: reg.guests[i].specialMealRequests || '', meals: {} });
+      }
+      renderGuests();
+    }
+    if (reg.MealSelections) {
+      try {
+        var meals = typeof reg.MealSelections === 'string' ? JSON.parse(reg.MealSelections) : reg.MealSelections;
+        window._compatriotMeals = meals;
+        window._savedMeals = meals;
+      } catch(me) {}
+    }
+    updateTotal();
+  }
+
   function validateContact() {
-    var email = document.getElementById('email').value.trim();
     var name = document.getElementById('name').value.trim();
-    if (!email || !name) { alert('Please fill in your email and name.'); return false; }
+    if (!name) { alert('Please fill in your name.'); return false; }
     return true;
   }
 
@@ -619,7 +660,7 @@
       if (config.ZelleQR) {
         var qrId = config.ZelleQR.match(/[-\w]{25,}/);
         var qrUrl = qrId ? 'https://lh3.googleusercontent.com/d/' + qrId[0] + '=s400' : config.ZelleQR;
-        qrHtml = '<p style="margin-top:8px"><img src="' + qrUrl + '" style="max-width:300px;width:100%"></p>';
+        qrHtml = '<p style="margin-top:8px"><img src="' + qrUrl + '" style="width:100%"></p>';
       }
       el.innerHTML = '<div style="background:#f9f9f9;padding:16px;border-radius:4px">' +
         '<h4 style="color:#6c3a9e;margin-bottom:8px">Send via Zelle</h4>' +
@@ -631,12 +672,6 @@
 
   function val(id) { var el = document.getElementById(id); return el ? el.value.trim() : ''; }
   function esc(s) { if (!s) return ''; var d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
-  function goToStatus() {
-    var email = document.getElementById('email').value.trim();
-    google.script.run.withSuccessHandler(function(u) {
-      window.open(u + '?page=status&email=' + encodeURIComponent(email), '_top');
-    }).getScriptUrl();
-  }
 </script>
 </body>
 </html>

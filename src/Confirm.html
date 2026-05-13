@@ -21,18 +21,17 @@
       <p style="font-size:16px">Thank you! Your credit card payment has been processed successfully.</p>
       <p style="margin-top:12px;color:#666">Your registration status will be updated shortly.</p>
       <p style="margin-top:20px">
-        <a id="statusLink" href="#" class="btn" style="color:#fff" onclick="goToStatus(); return false;">View Registration Status</a>
+        <a href="#" class="btn" style="color:#fff" onclick="goHome(); return false;">View Registration Status</a>
       </p>
     </div>
   </div>
 <script>
-  var regId = '<?= regId ?>';
-  function goToStatus() {
-    google.script.run.withSuccessHandler(function(email) {
-      google.script.run.withSuccessHandler(function(url) {
-        window.open(url + '?page=status&email=' + encodeURIComponent(email || ''), '_top');
-      }).getScriptUrl();
-    }).getEmailForRegistration(regId);
+  /*PARAMS*/
+  function goHome() {
+    google.script.run.withSuccessHandler(function(url) {
+      var email = (typeof _email !== 'undefined') ? _email : '';
+      window.open(url + (email ? '?email=' + encodeURIComponent(email) : ''), '_top');
+    }).getScriptUrl();
   }
 </script>
 </body>

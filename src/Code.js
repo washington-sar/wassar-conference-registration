@@ -23,22 +23,25 @@ function getEmailForRegistration(registrationId) {
 function doGet(e) {
   var page = (e && e.parameter && e.parameter.page) || 'index';
   var params = e && e.parameter ? e.parameter : {};
-  var template;
   switch (page) {
     case 'status':
-      template = HtmlService.createTemplateFromFile('Status');
-      template.urlEmail = params.email || '';
-      return template.evaluate().setTitle('Registration Status')
+      var statusHtml = HtmlService.createHtmlOutputFromFile('Status');
+      var statusEmail = params.email || '';
+      var statusContent = statusHtml.getContent().replace('/*PARAMS*/', 'var _urlEmail="' + statusEmail.replace(/"/g, '') + '";');
+      return HtmlService.createHtmlOutput(statusContent).setTitle('Registration Status')
         .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
     case 'confirm':
-      template = HtmlService.createTemplateFromFile('Confirm');
-      template.regId = params.reg_id || '';
-      return template.evaluate().setTitle('Registration Confirmed')
+      var confirmHtml = HtmlService.createHtmlOutputFromFile('Confirm');
+      confirmHtml.setTitle('Registration Confirmed');
+      var confirmEmail = params.email || '';
+      var content = confirmHtml.getContent().replace('/*PARAMS*/', 'var _email="' + confirmEmail.replace(/"/g, '') + '";');
+      return HtmlService.createHtmlOutput(content).setTitle('Registration Confirmed')
         .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
     default:
-      template = HtmlService.createTemplateFromFile('Index');
-      template.urlEmail = params.email || '';
-      return template.evaluate().setTitle('Conference Registration')
+      var indexHtml = HtmlService.createHtmlOutputFromFile('Index');
+      var indexEmail = params.email || '';
+      var indexContent = indexHtml.getContent().replace('/*PARAMS*/', 'var _urlEmail="' + indexEmail.replace(/"/g, '') + '";');
+      return HtmlService.createHtmlOutput(indexContent).setTitle('Conference Registration')
         .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
   }
 }
@@ -54,16 +57,31 @@ function doPost(e) {
 
 // ── Registration Data for the Form ──
 
-function getFormData() {
-  return JSON.stringify({
+/**
+ * Run this manually from the editor after changing Config, Meals, Pricing, Fields, Chapters, or Affiliations sheets.
+ */
+function regenerateFormData() {
+  var data = JSON.stringify({
     config: getAllConfig(),
     meals: getMealOptions(),
     pricing: getPricing(),
     fields: getFields(),
     chapters: getChapters(),
-    affiliations: getAffiliations(),
-    isOpen: isRegistrationOpen()
+    affiliations: getAffiliations()
   });
+  PropertiesService.getScriptProperties().setProperty('FORM_DATA', data);
+  Logger.log('Form data regenerated (' + data.length + ' bytes)');
+}
+
+function getFormData() {
+  var data = PropertiesService.getScriptProperties().getProperty('FORM_DATA');
+  if (!data) {
+    regenerateFormData();
+    data = PropertiesService.getScriptProperties().getProperty('FORM_DATA');
+  }
+  var parsed = JSON.parse(data);
+  try { parsed.isOpen = isRegistrationOpen(); } catch(e) { parsed.isOpen = true; }
+  return JSON.stringify(parsed);
 }
 
 // ── Registration CRUD ──

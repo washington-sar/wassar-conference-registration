@@ -64,6 +64,7 @@
   </div>
 
 <script>
+  /*PARAMS*/
   function lookup() {
     var email = document.getElementById('lookupEmail').value.trim();
     if (!email) { alert('Please enter your email.'); return; }
@@ -170,7 +171,7 @@
       .getScriptUrl();
   }
   // Auto-lookup if email passed in URL
-  var urlEmail = '<?= urlEmail ?>';
+  var urlEmail = window._urlEmail || '';
   if (urlEmail) {
     document.getElementById('lookupEmail').value = urlEmail;
     lookup();
